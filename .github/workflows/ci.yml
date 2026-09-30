@@ -1,0 +1,19 @@
+name: build-and-smoke
+on: [push, pull_request]
+jobs:
+  demo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet build -c Release
+      - run: docker compose up -d --build
+      - shell: pwsh
+        run: ./scripts/smoke.ps1
+      - if: always()
+        run: docker compose logs --no-color
+      - if: always()
+        run: docker compose down -v
