@@ -58,6 +58,33 @@ Invoke-RestMethod "http://localhost:5081/invoices/$($order.orderId)"
 
 ## Проверка
 
+### NUnit
+
+```sh
+# Unit: Docker не нужен
+dotnet test tests/Messaging.UnitTests -c Release
+# Integration: запущенный Docker с Linux containers
+dotnet test tests/Messaging.IntegrationTests -c Release
+# Оба набора
+dotnet test -c Release
+```
+
+`Messaging.UnitTests` содержит 22 проверки валидации: границы суммы и точности PostgreSQL, формат валюты, идентификаторы и версия события. Общая валидация используется и API, и consumer; consumer также отклоняет слишком большую сумму и валюту в нижнем регистре до обращения к БД.
+
+`Messaging.IntegrationTests` содержит 8 тестов с настоящими PostgreSQL и Kafka через Testcontainers:
+
+- атомарная запись заказа и соответствующего Outbox-события;
+- откат заказа при ошибке INSERT в Outbox;
+- последовательная и конкурентная (8 вызовов) дедупликация Inbox;
+- откат Inbox при ошибке INSERT счёта и успешная повторная обработка;
+- отсутствие записи Inbox для невалидного события;
+- полный путь Outbox → Kafka → Inbox, replay и подтверждение offset повторного события;
+- отсутствие commit offset при ошибке БД и восстановление после устранения ошибки.
+
+Тесты создают свои контейнеры, случайные порты и topics; Compose предварительно запускать не нужно. В одном PostgreSQL-контейнере создаются отдельные базы `orders` и `billing`, схемы и обработчики берутся из production-кода. Контейнеры удаляются после тестов, данные demo не затрагиваются. PostgreSQL: `postgres:17`; Kafka: `confluentinc/cp-kafka:7.8.0`. Первый запуск скачивает образы. Нужен доступ к Docker API и registry; без Docker интеграционные тесты завершаются ошибкой setup, а не незаметным skip. Категории NUnit: `Unit`, `Integration`.
+
+### Smoke через HTTP и Docker Compose
+
 ```sh
 dotnet build -c Release
 pwsh -File scripts/smoke.ps1
@@ -65,7 +92,7 @@ pwsh -File scripts/smoke.ps1
 
 Smoke-тест требует запущенного Compose. Создаёт заказ, проверяет сумму/валюту счёта, сбрасывает `published_at`, ждёт повторной обработки того же EventId и проверяет единственность Inbox/счёта. Затем останавливает Kafka, создаёт заказ и проверяет доставку после восстановления. Kafka запускается обратно в `finally`. Тест меняет только данные стенда, не удаляет существующие записи.
 
-GitHub Actions выполняет сборку, запуск Compose и этот же smoke-тест на Linux. Наличие workflow не означает, что CI уже запускался.
+GitHub Actions выполняет сборку, оба набора NUnit, сохраняет TRX-отчёты, затем запускает Compose и smoke-тест на Linux. Наличие workflow не означает, что CI уже запускался.
 
 Посмотреть данные:
 
@@ -93,6 +120,8 @@ dotnet run --project src/Billing.Api --no-launch-profile --urls http://localhost
 - `src/Messaging` — контракт события и небольшой SQL helper.
 - `compose.yaml` — два PostgreSQL, Kafka в KRaft, создание topic, два API.
 - `scripts/smoke.ps1` — проверка через реальные Kafka и PostgreSQL.
+- `tests/Messaging.UnitTests` — NUnit без инфраструктуры.
+- `tests/Messaging.IntegrationTests` — NUnit + Testcontainers.
 
 ## Границы demo
 

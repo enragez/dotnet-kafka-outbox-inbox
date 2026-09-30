@@ -5,17 +5,10 @@ using Npgsql;
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddSingleton(NpgsqlDataSource.Create(builder.Configuration.GetConnectionString("Database")
     ?? "Host=localhost;Port=55433;Database=billing;Username=demo;Password=demo"));
+builder.Services.AddSingleton<InvoiceHandler>();
 builder.Services.AddHostedService<OrderConsumer>();
 var app = builder.Build();
-await using (var connection = await app.Services.GetRequiredService<NpgsqlDataSource>().OpenConnectionAsync())
-    await Database.Execute(connection, null, """
-        CREATE TABLE IF NOT EXISTS inbox (
-            consumer text NOT NULL, event_id uuid NOT NULL, processed_at timestamptz NOT NULL DEFAULT now(),
-            PRIMARY KEY(consumer,event_id));
-        CREATE TABLE IF NOT EXISTS invoices (
-            id uuid PRIMARY KEY, order_id uuid NOT NULL UNIQUE, amount numeric(18,2) NOT NULL CHECK(amount > 0),
-            currency text NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
-        """, default);
+await Schema.Initialize(app.Services.GetRequiredService<NpgsqlDataSource>());
 app.MapGet("/health", () => Results.Ok(new { status = "alive" }));
 app.MapGet("/invoices/{orderId:guid}", async (Guid orderId, NpgsqlDataSource db, CancellationToken ct) =>
 {

@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../../src/Orders.Api/Orders.Api.csproj" />
+    <ProjectReference Include="../../src/Billing.Api/Billing.Api.csproj" />
+    <PackageReference Include="Testcontainers.PostgreSql" Version="4.15.0" />
+    <PackageReference Include="Testcontainers.Kafka" Version="4.15.0" />
+  </ItemGroup>
+</Project>
